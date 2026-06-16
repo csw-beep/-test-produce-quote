@@ -187,6 +187,9 @@ body {
 .quote-scope .fg label {font-size:11px;color:#888;font-weight:500}
 .quote-scope .fg input, .quote-scope .fg select {font-size:13px;height:36px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#111;padding:0 10px;width:100%;outline:none}
 .quote-scope .fg input:focus, .quote-scope .fg select:focus {border-color:#3B6D11}
+.quote-scope .unit-combo {display:flex;gap:6px}
+.quote-scope .unit-combo .unit-qty-input {width:64px;flex-shrink:0;text-align:center;padding:0 4px}
+.quote-scope .unit-combo select {flex:1;min-width:0}
 .quote-scope .vendor-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:1.25rem}
 .quote-scope .vc {background:#fff;border:1px solid #eee;border-radius:12px;padding:1.25rem}
 .quote-scope .vc-name {font-size:14px;font-weight:600;color:#111;margin-bottom:2px}
@@ -1880,7 +1883,12 @@ function renderAddForm(){
   el.innerHTML = `
     <div class="fg"><label>업체명</label><select id="add-vendor">${vopts}</select></div>
     <div class="fg"><label>품목명</label><input id="add-name" placeholder="예: 사과"/></div>
-    <div class="fg"><label>단위</label><select id="add-unit"><option>kg</option><option>박스</option><option>개</option><option>포기</option><option>단</option><option>망</option></select></div>
+    <div class="fg"><label>단위</label>
+      <div class="unit-combo">
+        <input id="add-unit-qty" type="number" min="0" step="any" placeholder="2" class="unit-qty-input"/>
+        <select id="add-unit-type"><option>kg</option><option>박스</option><option>개</option><option>포기</option><option>단</option><option>망</option></select>
+      </div>
+    </div>
     <div class="fg"><label>공급가</label><input id="add-price" type="number" placeholder="0" min="0"/></div>
     <div class="fg"><label>비고</label><input id="add-note" placeholder="선택사항"/></div>
     <div class="fg"><label>&nbsp;</label><button class="btn-p" onclick="addItem()">➕ 추가</button></div>
@@ -1922,7 +1930,9 @@ async function addItem(){
   const vendor = document.getElementById('add-vendor')?.value;
   const name = document.getElementById('add-name')?.value.trim();
   if (!name){ showToast('품목명을 입력해주세요', true); return; }
-  const unit = document.getElementById('add-unit')?.value || '개';
+  const qtyRaw = document.getElementById('add-unit-qty')?.value.trim();
+  const unitType = document.getElementById('add-unit-type')?.value || '개';
+  const unit = qtyRaw ? `${qtyRaw}${unitType}` : unitType;
   const pv = document.getElementById('add-price')?.value;
   const price = pv===''||pv==null ? null : parseInt(pv);
   const note = document.getElementById('add-note')?.value.trim() || '';
@@ -1933,6 +1943,8 @@ async function addItem(){
   document.getElementById('add-name').value = '';
   document.getElementById('add-price').value = '';
   document.getElementById('add-note').value = '';
+  const qtyEl = document.getElementById('add-unit-qty');
+  if (qtyEl) qtyEl.value = '';
 }
 
 async function deleteItem(id){
