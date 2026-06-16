@@ -149,6 +149,9 @@ body {
 .quote-scope .tab.active {background:#3B6D11;color:#fff;border-color:#3B6D11;font-weight:500}
 .quote-scope .section {display:none}
 .quote-scope .section.active {display:block}
+.quote-scope .undo-bar {display:flex;align-items:center;justify-content:space-between;gap:10px;background:#FFF7E6;border:1px solid #FCE4B0;border-radius:10px;padding:10px 14px;margin-bottom:1rem;font-size:12.5px;color:#92660A;flex-wrap:wrap}
+.quote-scope .undo-btn {background:#fff;border:1px solid #F0C772;color:#92660A;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s}
+.quote-scope .undo-btn:hover {background:#FFF1D6}
 .quote-scope .stats-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:1.25rem}
 .quote-scope .stat-card {background:#fff;border-radius:10px;padding:1rem;border:1px solid #eee}
 .quote-scope .stat-label {font-size:11px;color:#888;margin-bottom:4px}
@@ -225,6 +228,10 @@ body {
 .quote-scope .pc-unit-meta {font-size:11.5px;color:#999}
 .quote-scope .pc-body {display:flex;flex-direction:column;padding-bottom:4px}
 .quote-scope .pc-row {display:grid;grid-template-columns:110px 1fr 1fr 28px;align-items:center;gap:10px;padding:7px 14px 7px 26px;transition:background .12s}
+.quote-scope .pc-vendor-cell {display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.quote-scope .pc-date {font-size:10.5px;color:#bbb;padding:1px 2px}
+.quote-scope .pc-date:hover {color:#3B6D11}
+.quote-scope .date-input {font-size:12px;padding:2px 4px;border:1px solid #3B6D11;border-radius:4px;outline:none}
 .quote-scope .pc-row:hover {background:#fafafa}
 .quote-scope .pc-row:hover .row-del {opacity:1}
 .quote-scope .pc-row-best {background:#F7FBF1}
@@ -901,6 +908,10 @@ body {
 
 <!-- 비교표 -->
 <div id="sec-compare" class="section active">
+  <div class="undo-bar" id="undo-bar" style="display:none">
+    <span id="undo-label"></span>
+    <button class="undo-btn" onclick="undoLastImport()">↩ 되돌리기</button>
+  </div>
   <div class="stats-grid" id="stats"></div>
   <div class="card">
     <div class="card-title">품목별 가격 비교 <span class="result-count" id="result-count"></span></div>
@@ -982,7 +993,7 @@ body {
   <div class="card">
     <div class="card-title">새 항목 추가</div>
     <div class="form-row" id="add-form"></div>
-    <div style="margin-top:8px;font-size:12px;color:#999">공급가를 비워두면 미견적으로 처리됩니다.</div>
+    <div style="margin-top:8px;font-size:12px;color:#999">공급가를 비워두면 미견적으로 처리됩니다. 등록 날짜는 추가하는 시점으로 자동 저장됩니다.</div>
   </div>
   <div class="card">
     <div class="card-title">전체 항목 관리</div>
@@ -1488,6 +1499,20 @@ let parsedRows = null;
 
 function uid(){ return 'i' + Date.now() + Math.random().toString(36).slice(2,6); }
 function fmt(n){ return n == null || n === '' ? '-' : Number(n).toLocaleString('ko-KR') + '원'; }
+function todayStr(){
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+function fmtDate(dateStr){
+  if(!dateStr) return '날짜 미상';
+  // 'YYYY-MM-DD' -> 'YYYY.MM.DD'
+  const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return `${m[1]}.${m[2]}.${m[3]}`;
+  return dateStr;
+}
 
 function setSyncState(s, l){
   document.getElementById('sync-dot').className = 'sync-dot ' + (s==='ok'?'ok':s==='busy'?'busy':'err');
@@ -1525,18 +1550,60 @@ async function saveData(){
   } catch(e){ setSyncState('err','저장 실패'); }
 }
 
+/* ── 되돌리기 (업로드 직전 상태, 최근 1단계만 보관) ── */
+let undoSnapshot = null; // {label, vendors, items, savedAt}
+
+async function saveUndoSnapshot(label){
+  undoSnapshot = {
+    label,
+    vendors: JSON.parse(JSON.stringify(vendors)),
+    items: JSON.parse(JSON.stringify(items)),
+    savedAt: new Date().toISOString()
+  };
+  try { await fbSet('/undo_snapshot', undoSnapshot); } catch(e){ /* 스냅샷 저장 실패는 업로드 자체를 막지 않음 */ }
+  updateUndoBar();
+}
+
+async function undoLastImport(){
+  if (!undoSnapshot){ showToast('되돌릴 이전 상태가 없습니다', true); return; }
+  if (!confirm('업로드 직전 상태로 되돌릴까요? 이후 변경 내용은 사라집니다.')) return;
+  vendors = undoSnapshot.vendors;
+  items = undoSnapshot.items;
+  undoSnapshot = null;
+  try { await fbSet('/undo_snapshot', null); } catch(e){}
+  await saveData();
+  renderAll();
+  updateUndoBar();
+  showToast('이전 상태로 되돌렸습니다');
+}
+
+function updateUndoBar(){
+  const bar = document.getElementById('undo-bar');
+  if (!bar) return;
+  if (undoSnapshot) {
+    bar.style.display = 'flex';
+    document.getElementById('undo-label').textContent =
+      `"${undoSnapshot.label}" 시점으로 되돌릴 수 있어요`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
 async function loadData(){
   setSyncState('busy','불러오는 중...');
   try{
     const v = await fbGet('/vendors');
     const it = await fbGet('/items');
+    const undo = await fbGet('/undo_snapshot');
     if (v && Array.isArray(v)) vendors = v;
     if (it && Array.isArray(it)) items = it;
+    if (undo && undo.items) undoSnapshot = undo;
     setSyncState('ok','동기화됨');
   } catch(e){
     setSyncState('err','연결 실패');
   }
   renderAll();
+  updateUndoBar();
 }
 
 async function resetData(){
@@ -1616,6 +1683,7 @@ function renderAll(){
   updateDropdowns();
   renderStats(); renderTable(); renderVendors(); renderWinnerList();
   renderAddForm(); renderManageList(); renderVendorSettings();
+  updateUndoBar();
 }
 
 function renderStats(){
@@ -1719,7 +1787,10 @@ function renderTable(){
           ? `<span class="pc-diff">+${fmt(diffFromMin)}</span>`
           : (isMin ? '<span class="pc-diff pc-diff-best">최저가</span>' : '');
         return `<div class="pc-row${isMin?' pc-row-best':''}">
-          <span class="editable vbadge ${vClass}" onclick="startEdit('${it.id}','vendor',this,'${it.vendor.replace(/'/g,"\'")}',true)">${hl(it.vendor,q)}</span>
+          <span class="pc-vendor-cell">
+            <span class="editable vbadge ${vClass}" onclick="startEdit('${it.id}','vendor',this,'${it.vendor.replace(/'/g,"\'")}',true)">${hl(it.vendor,q)}</span>
+            <span class="pc-date editable" onclick="startEditDate('${it.id}',this,'${it.date||''}')">${fmtDate(it.date)}</span>
+          </span>
           <span class="pc-row-mid">
             <span class="editable" onclick="startEditPrice('${it.id}',this,${it.price!=null?it.price:'null'})">${priceDisplay}</span>
             ${diffDisplay}
@@ -1828,6 +1899,7 @@ function renderManageList(){
         <span style="font-weight:600">${it.name}</span>
         <span style="color:#999;font-size:12px">${it.unit||''}</span>
         <span>${fmt(it.price)}</span>
+        <span style="color:#bbb;font-size:11px">${fmtDate(it.date)}</span>
         ${it.note ? `<span style="font-size:12px;color:#999">${it.note}</span>` : ''}
       </div>
       <button class="btn-s" onclick="deleteItem('${it.id}')" style="color:#ef4444;border-color:#fecaca">🗑 삭제</button>
@@ -1854,7 +1926,8 @@ async function addItem(){
   const pv = document.getElementById('add-price')?.value;
   const price = pv===''||pv==null ? null : parseInt(pv);
   const note = document.getElementById('add-note')?.value.trim() || '';
-  items.push({id:uid(), vendor, name, unit, price, note});
+  const date = todayStr();
+  items.push({id:uid(), vendor, name, unit, price, note, date});
   await saveData(); renderAll();
   showToast(`"${name}" 추가됨`);
   document.getElementById('add-name').value = '';
@@ -1895,10 +1968,9 @@ async function renameVendor(vi, newName){
 }
 
 function quoteSwitchTab(id, el){
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#shell-page-quote .section').forEach(s => s.classList.remove('active'));
   document.getElementById('sec-'+id).classList.add('active');
-  el.classList.add('active');
+  if(el && el.classList) el.classList.add('active');
 }
 
 function setMode(m){
@@ -1926,12 +1998,39 @@ function extractVendorFromFilename(filename){
 
 /* 헤더 행 자동 탐지: 상품명/공급가 등 키워드가 있는 첫 번째 행 */
 function detectHeaderRow(json){
-  const keys = ['상품','품목','공급가','가격','단가','name','price','item','코드','비고'];
+  const keys = ['상품','품목','공급가','가격','단가','name','price','item','코드','비고','날짜','date'];
   for (let i = 0; i < Math.min(json.length, 8); i++){
     const row = json[i].map(c => String(c||'').toLowerCase());
     if (keys.some(k => row.some(cell => cell.includes(k)))) return i;
   }
   return 0;
+}
+
+/* 엑셀 날짜(serial) 또는 다양한 문자열 형식을 'YYYY-MM-DD'로 정규화 */
+function parseDateCell(val){
+  if (val === '' || val == null) return null;
+  if (typeof val === 'number') {
+    // 엑셀 날짜 시리얼 번호 (1900-01-01 기준, 윤년 버그 보정 포함 XLSX가 이미 처리해주는 경우도 있음)
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    if (!isNaN(d.getTime())) return todayStrFrom(d);
+    return null;
+  }
+  const s = String(val).trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+  if (m) {
+    const yyyy = m[1], mm = String(m[2]).padStart(2,'0'), dd = String(m[3]).padStart(2,'0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return todayStrFrom(d);
+  return null;
+}
+function todayStrFrom(d){
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function processFile(file){
@@ -1971,12 +2070,16 @@ function renderPreview(json){
   /* 업체명 컬럼 없으면 파일명에서 추출 안내 */
   const headerLow = header.map(c => String(c||'').toLowerCase());
   const hasVendorCol = ['업체','vendor','거래처','공급사'].some(k => headerLow.some(h => h.includes(k)));
+  const hasDateCol = ['날짜','date','등록일','견적일'].some(k => headerLow.some(h => h.includes(k)));
   const autoVendor = extractVendorFromFilename(currentFileName);
   const vendorNote = hasVendorCol
     ? '업체명 열이 감지되었습니다.'
     : `업체명 열 없음 → 파일명에서 "<b>${autoVendor}</b>"(으)로 자동 적용됩니다.`;
+  const dateNote = hasDateCol
+    ? '날짜 열이 감지되었습니다.'
+    : '날짜 열 없음 → 가져오는 시점의 날짜가 자동 적용됩니다.';
   document.getElementById('preview-info').innerHTML =
-    `총 ${dataRows}개 행 감지됨 &nbsp;|&nbsp; ${vendorNote}`;
+    `총 ${dataRows}개 행 감지됨 &nbsp;|&nbsp; ${vendorNote} &nbsp;|&nbsp; ${dateNote}`;
 }
 
 async function importData(){
@@ -1993,11 +2096,14 @@ async function importData(){
   const cU  = find('단위','unit');
   const cP  = find('공급가','가격','단가','price');
   const cNo = find('비고','note','메모','remark');
+  const cD  = find('날짜','date','등록일','견적일');
 
   if (cN < 0){ showToast('품목명 열을 찾을 수 없습니다. 헤더를 확인해주세요.', true); return; }
 
   /* 업체명 컬럼 없으면 파일명에서 추출 */
   const autoVendor = extractVendorFromFilename(currentFileName);
+  /* 날짜 열 값이 없는 행에 적용할 기본값: 가져오기(업로드) 시점 */
+  const importDate = todayStr();
 
   const btn = document.getElementById('import-btn');
   btn.disabled = true; btn.textContent = '가져오는 중...';
@@ -2007,9 +2113,12 @@ async function importData(){
 
   if (!rows.length){ showToast('가져올 데이터가 없습니다', true); btn.disabled=false; btn.textContent='📥 가져오기'; return; }
 
+  /* 되돌리기용 스냅샷: 업로드 직전 상태를 1단계 저장 (최근 1회만 유지) */
+  saveUndoSnapshot('업로드 이전 상태');
+
   if (importMode === 'replace') items = [];
 
-  let added = 0;
+  let added = 0, updated = 0;
   const newV = [];
 
   rows.forEach(row => {
@@ -2029,19 +2138,43 @@ async function importData(){
     const pRaw  = cP >= 0 ? row[cP] : '';
     const price = pRaw===''||pRaw==null ? null : Math.round(parseFloat(String(pRaw).replace(/[^0-9.]/g,'')))||null;
     const note  = cNo >= 0 ? String(row[cNo]||'').trim() : '';
+    const date  = (cD >= 0 ? parseDateCell(row[cD]) : null) || importDate;
 
     if (!vendors.includes(vendor) && !newV.includes(vendor)) newV.push(vendor);
 
-    items.push({id:uid(), vendor, name, unit, price, note});
+    if (importMode === 'merge') {
+      /* 같은 업체+품목+단위+가격의 기존 행이 있으면: 같은 견적의 재업로드로 보고 날짜만 갱신 (덮어쓰기) */
+      const dup = items.find(it =>
+        it.vendor === vendor && it.name === name &&
+        (it.unit||'') === unit && it.price === price
+      );
+      if (dup) {
+        dup.date = date;
+        if (note) dup.note = note;
+        updated++;
+        return;
+      }
+    }
+
+    /* 가격이 다르거나 처음 보는 조합이면: 새로운 견적(가격 변동 이력)으로 추가 */
+    items.push({id:uid(), vendor, name, unit, price, note, date});
     added++;
   });
 
   newV.forEach(v => { if (!vendors.includes(v)) vendors.push(v); });
   await saveData(); renderAll();
   btn.disabled=false; btn.textContent='📥 가져오기';
-  showToast(`완료: ${added}개 추가${newV.length?' / 업체 "'+newV.join(', ')+'" 자동 등록':''}`);
+  const updNote = updated ? `, ${updated}개 동일견적 갱신` : '';
+  showToast(`완료: ${added}개 추가${updNote}${newV.length?' / 업체 "'+newV.join(', ')+'" 자동 등록':''}`);
   cancelUpload();
-  quoteSwitchTab('compare', document.querySelectorAll('.tab')[0]);
+  quoteSwitchTab('compare', null);
+  // 사이드바 서브메뉴 active 동기화
+  const quoteSubnav = document.querySelector('#group-quote .shell-subnav');
+  if(quoteSubnav){
+    quoteSubnav.querySelectorAll('.shell-sublink').forEach(b => b.classList.remove('active'));
+    const compareLink = quoteSubnav.querySelector('.shell-sublink');
+    if(compareLink) compareLink.classList.add('active');
+  }
 }
 
 function cancelUpload(){
@@ -2053,20 +2186,20 @@ function cancelUpload(){
 function exportTemplate(){
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
-    ['업체명','품목명','단위','공급가','비고'],
-    ['한성청과','사과','kg',3200,''],
-    ['서울농산','사과','kg',3500,'GAP 인증'],
-    ['강남과일','귤','kg',1900,'제주산'],
+    ['업체명','품목명','단위','공급가','비고','날짜'],
+    ['한성청과','사과','kg',3200,'','2026-06-16'],
+    ['서울농산','사과','kg',3500,'GAP 인증',''],
+    ['강남과일','귤','kg',1900,'제주산',''],
   ]);
-  ws['!cols'] = [{wch:14},{wch:14},{wch:8},{wch:12},{wch:20}];
+  ws['!cols'] = [{wch:14},{wch:14},{wch:8},{wch:12},{wch:20},{wch:12}];
   XLSX.utils.book_append_sheet(wb, ws, '견적입력');
   XLSX.writeFile(wb, '견적_양식.xlsx');
   showToast('양식 다운로드 완료');
 }
 
 function exportCSV(){
-  let csv = '업체명,품목명,단위,공급가,비고\n';
-  items.forEach(it => { csv += `${it.vendor},${it.name},${it.unit||''},${it.price!=null?it.price:''},${it.note||''}\n`; });
+  let csv = '업체명,품목명,단위,공급가,비고,날짜\n';
+  items.forEach(it => { csv += `${it.vendor},${it.name},${it.unit||''},${it.price!=null?it.price:''},${it.note||''},${it.date||''}\n`; });
   const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='견적비교.csv'; a.click();
   showToast('CSV 다운로드 완료');
@@ -2179,6 +2312,29 @@ function startEditPrice(id, el, currentPrice){
   });
 }
 
+function startEditDate(id, el, currentDate){
+  const input = document.createElement('input');
+  input.className = 'edit-input date-input';
+  input.type = 'date';
+  input.value = currentDate || '';
+  el.replaceWith(input);
+  input.focus();
+  async function commit(){
+    const it = items.find(i => i.id===id);
+    if (it) {
+      it.date = input.value || null;
+      await saveData();
+    }
+    renderAll();
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('change', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key==='Enter') { e.preventDefault(); input.blur(); }
+    if (e.key==='Escape') { renderAll(); }
+  });
+}
+
 loadData();
 
 window.applyFilters = applyFilters;
@@ -2203,6 +2359,8 @@ window.startEdit = startEdit;
 window.startEditPrice = startEditPrice;
 window.startEditGroupName = startEditGroupName;
 window.startEditGroupUnit = startEditGroupUnit;
+window.startEditDate = startEditDate;
+window.undoLastImport = undoLastImport;
 })();
 </script>
 <script>
