@@ -94,7 +94,7 @@ body {
 .shell-theme-toggle:hover { background: var(--shell-hover); }
 
 /* ── 메인 콘텐츠 ── */
-.shell-main { min-width:0; overflow-x:hidden; }
+.shell-main { flex:1; min-width:0; overflow-x:hidden; }
 .shell-page { display:none; }
 .shell-page.active { display:block; }
 
@@ -127,7 +127,7 @@ body {
 /* ══ 견적 대시보드 스타일 ══ */
 .quote-scope * {box-sizing:border-box;margin:0;padding:0}
 .quote-scope {font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5;color:#111;min-height:100%}
-.quote-scope .wrap {max-width:1100px;margin:0 auto;padding:1.5rem 1rem}
+.quote-scope .wrap {max-width:none;margin:0 auto;padding:1.5rem 1rem}
 .quote-scope .header {display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;gap:12px;flex-wrap:wrap}
 .quote-scope .header h1 {font-size:20px;font-weight:600;color:#111;display:flex;align-items:center;gap:8px}
 .quote-scope .header h1 span {color:#3B6D11}
@@ -1479,13 +1479,12 @@ body {
 </footer>
 </div>
   </div>
-</div>
 
   <div class="shell-page" id="shell-page-vendor">
 <style>
 .vs-scope{font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f7f8fa;color:#1a1a1a;min-height:100vh;padding:0}
 .vs-scope *{box-sizing:border-box;margin:0;padding:0}
-.vs-wrap{max-width:1400px;margin:0 auto;padding:28px 24px}
+.vs-wrap{max-width:none;padding:28px 24px}
 .vs-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px}
 .vs-header h1{font-size:21px;font-weight:700;color:#111;display:flex;align-items:center;gap:8px}
 .vs-header p{font-size:13px;color:#666;margin-top:3px}
@@ -2241,7 +2240,7 @@ function renderManageList(){
   if (!fi.length){ el.innerHTML='<div class="empty">등록된 항목 없음</div>'; return; }
   el.innerHTML = fi.map(it => {
     const vIdx = vendors.indexOf(it.vendor);
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5;font-size:13px;flex-wrap:wrap;gap:6px">
+    return `<div id="edit-row-${it.id}"><div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5;font-size:13px;flex-wrap:wrap;gap:6px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="vbadge ${VBC[vIdx>=0?vIdx%VBC.length:0]}">${it.vendor}</span>
         <span style="font-weight:600">${it.name}</span>
@@ -2250,9 +2249,60 @@ function renderManageList(){
         <span style="color:#bbb;font-size:11px">${fmtDate(it.date)}</span>
         ${it.note ? `<span style="font-size:12px;color:#999">${it.note}</span>` : ''}
       </div>
-      <button class="btn-s" onclick="deleteItem('${it.id}')" style="color:#ef4444;border-color:#fecaca">🗑 삭제</button>
-    </div>`;
+      <div style="display:flex;gap:6px">
+        <button class="btn-s" onclick="editItem('${it.id}')">✏️ 수정</button>
+        <button class="btn-s" onclick="deleteItem('${it.id}')" style="color:#ef4444;border-color:#fecaca">🗑 삭제</button>
+      </div>
+    </div></div>`;
   }).join('');
+}
+
+function editItem(id){
+  const it = items.find(i => i.id === id);
+  if (!it) return;
+  const m = (it.unit||'').match(/^(\d+(?:\.\d+)?)(.+)$/);
+  const uqty = m ? m[1] : '';
+  const utype = m ? m[2] : (it.unit||'kg');
+  const vopts = vendors.map(v=>`<option value="${v}"${v===it.vendor?' selected':''}>${v}</option>`).join('');
+  const UTYPES = ['kg','박스','개','포기','단','망'];
+  const uopts = UTYPES.map(u=>`<option${u===utype?' selected':''}>${u}</option>`).join('');
+  const row = document.getElementById('edit-row-'+id);
+  if (!row) return;
+  row.innerHTML = `
+    <div style="background:#f0f7e8;border-radius:8px;padding:10px 12px;margin:4px 0;border:1px solid #c8e6a0">
+      <div class="form-row">
+        <div class="fg"><label>업체명</label><select id="ei-v-${id}">${vopts}</select></div>
+        <div class="fg"><label>품목명</label><input id="ei-n-${id}" value="${it.name.replace(/"/g,'&quot;')}"/></div>
+        <div class="fg"><label>단위</label><div class="unit-combo">
+          <input id="ei-uq-${id}" type="number" min="0" step="any" value="${uqty}" class="unit-qty-input"/>
+          <select id="ei-ut-${id}">${uopts}</select>
+        </div></div>
+        <div class="fg"><label>공급가</label><input id="ei-p-${id}" type="number" min="0" value="${it.price??''}"/></div>
+        <div class="fg"><label>비고</label><input id="ei-note-${id}" value="${(it.note||'').replace(/"/g,'&quot;')}"/></div>
+        <div class="fg"><label>&nbsp;</label><div style="display:flex;gap:6px">
+          <button class="btn-p" onclick="saveEdit('${id}')">✅ 저장</button>
+          <button class="btn-s" onclick="renderManageList()">취소</button>
+        </div></div>
+      </div>
+    </div>`;
+}
+
+async function saveEdit(id){
+  const it = items.find(i => i.id === id);
+  if (!it) return;
+  const name = document.getElementById('ei-n-'+id)?.value.trim();
+  if (!name){ showToast('품목명을 입력해주세요', true); return; }
+  it.vendor = document.getElementById('ei-v-'+id)?.value || it.vendor;
+  it.name = name;
+  const qr = document.getElementById('ei-uq-'+id)?.value.trim();
+  const ut = document.getElementById('ei-ut-'+id)?.value || 'kg';
+  it.unit = qr ? `${qr}${ut}` : ut;
+  const pv = document.getElementById('ei-p-'+id)?.value;
+  it.price = (pv===''||pv==null) ? null : parseInt(pv);
+  it.note = document.getElementById('ei-note-'+id)?.value.trim()||'';
+  await saveData();
+  renderAll();
+  showToast('수정 완료');
 }
 
 function renderVendorSettings(){
@@ -2706,6 +2756,9 @@ window.addVendor = addVendor;
 window.importData = importData;
 window.addItem = addItem;
 window.deleteItem = deleteItem;
+window.editItem = editItem;
+window.saveEdit = saveEdit;
+window.renderManageList = renderManageList;
 window.removeVendor = removeVendor;
 window.startEdit = startEdit;
 window.startEditPrice = startEditPrice;
@@ -4150,5 +4203,8 @@ vsRenderFilters();
 vsRender();
 })();
 </script>
+</div>
+</div>
+</div>
 </body>
 </html>
