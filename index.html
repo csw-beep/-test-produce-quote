@@ -262,6 +262,19 @@ body {
 .quote-scope .edit-input {font-size:13px;border:1.5px solid #3B6D11;border-radius:6px;padding:3px 7px;outline:none;background:#fff;color:#111;width:100%;box-sizing:border-box}
 .quote-scope .edit-input.price-input {width:110px}
 .quote-scope .result-count {margin-left:auto;font-size:11px;font-weight:400;color:#999}
+.quote-scope .pc-cmp-bar {display:flex;align-items:center;gap:6px;padding:5px 14px 7px 14px;background:#f8f5ff;border-top:1px solid #e9e3ff}
+.quote-scope .pc-cmp-input {height:28px;width:110px;border-radius:6px;border:1.5px solid #8b5cf6;padding:0 8px;font-size:13px;font-weight:600;color:#111;outline:none;text-align:right}
+.quote-scope .pc-cmp-input:focus {border-color:#7c3aed}
+.quote-scope .pc-cmp-label {font-size:11.5px;color:#7c3aed;font-weight:600}
+.quote-scope .pc-cmp-clear {height:24px;padding:0 8px;border-radius:6px;border:1px solid #c4b5fd;background:#fff;color:#7c3aed;font-size:11.5px;cursor:pointer}
+.quote-scope .pc-cmp-row {background:#fdf8ff!important}
+.quote-scope .pc-cmp-tag {font-size:11px;padding:2px 7px;border-radius:5px;white-space:nowrap}
+.quote-scope .pc-cmp-tag-cheap {background:#dcfce7;color:#166534}
+.quote-scope .pc-cmp-tag-same {background:#f3f4f6;color:#6b7280}
+.quote-scope .pc-cmp-tag-exp {background:#fef3c7;color:#92400e}
+.quote-scope .pc-cmp-btn {height:26px;padding:0 10px;border-radius:6px;border:1px solid #c4b5fd;background:#faf5ff;color:#7c3aed;font-size:11.5px;cursor:pointer;font-weight:500;transition:all .12s;white-space:nowrap}
+.quote-scope .pc-cmp-btn:hover {background:#ede9fe}
+.quote-scope .pc-cmp-btn.active {background:#7c3aed;color:#fff;border-color:#7c3aed}
 
 /* ══ 시즌 키워드 스타일 ══ */
 .season-scope *, .season-scope *::before, .season-scope *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1824,14 +1837,15 @@ textarea.vs-form-input{resize:vertical;min-height:82px;line-height:1.55}
 
       <!-- 직접 입력 모드 -->
       <div id="vs-bulk-text-panel" style="display:none">
-        <div style="margin-bottom:8px;font-size:12px;color:#666;background:#f9f9f9;border-radius:8px;padding:9px 12px;border:1px solid #eee;line-height:1.7">
-          한 행에 업체 1개, 콤마(,)로 구분해서 입력하세요. <strong style="color:#111">브랜드명</strong>은 필수입니다.<br>
-          <span style="color:#999;font-size:11.5px">DB유입날짜, 브랜드명, 업종(카테고리), 담당자명, 전화번호, 메일주소, 쇼핑몰링크, TM상태, 비고</span>
+        <div style="margin-bottom:8px;font-size:12px;color:#555;background:#f9f9f9;border-radius:8px;padding:9px 12px;border:1px solid #eee;line-height:1.8">
+          구글 시트에서 <strong style="color:#111">헤더 포함 전체 선택 후 복사(Ctrl+C)</strong> → 아래에 붙여넣기(Ctrl+V)<br>
+          <span style="color:#999;font-size:11px">컬럼 순서: 타임라인 · 업체명 · 주요 판매 품목 · 판매 링크 · 담당자명 · 전화번호 · 이메일 · 상태</span>
         </div>
         <div style="margin-bottom:6px;display:flex;gap:6px;align-items:center">
           <button onclick="vsBulkPaste()" style="height:30px;padding:0 12px;border-radius:7px;border:1px solid #ddd;background:#fff;color:#555;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">📋 클립보드 붙여넣기</button>
+          <span style="font-size:11.5px;color:#bbb">헤더 행은 자동으로 제외됩니다</span>
         </div>
-        <textarea id="vrf-bulk-text" placeholder="2026-06-24, 홍길동식품, 가공식품, 홍길동, 010-0000-0000, email@naver.com, https://..., 미배정, 비고&#10;2026-06-23, 행복농원, 농수산물, 김철수, 010-1111-2222" style="width:100%;height:160px;border-radius:8px;border:1px solid #ddd;padding:10px 12px;font-size:12.5px;color:#111;outline:none;resize:vertical;font-family:inherit;line-height:1.7" spellcheck="false"></textarea>
+        <textarea id="vrf-bulk-text" placeholder="타임라인&#9;업체명&#9;주요 판매 품목&#9;판매 링크&#9;담당자명&#9;전화번호&#9;이메일&#9;상태&#10;2026. 6. 22&#9;환희농원&#9;플럼코트, 살구&#9;https://smartstore.naver.com/...&#9;한순희&#9;010-4867-1254&#9;moon_012@naver.com&#9;" style="width:100%;height:170px;border-radius:8px;border:1px solid #ddd;padding:10px 12px;font-size:12.5px;color:#111;outline:none;resize:vertical;font-family:inherit;line-height:1.7" spellcheck="false"></textarea>
       </div>
 
       <div id="vs-bulk-preview" style="margin-top:8px"></div>
@@ -2207,19 +2221,90 @@ function renderTable(){
       </div>`;
     }).join('');
 
+    const cmpKey = g.name;
+    const cmpVal = (window._cmpPrices && window._cmpPrices[cmpKey] != null) ? window._cmpPrices[cmpKey] : '';
+    const safeId = g.name.replace(/[^\w\uAC00-\uD7A3]/g,'_');
+
+    let cmpRowsHtml = '';
+    if (cmpVal !== '') {
+      const cp = Number(cmpVal);
+      cmpRowsHtml = g.unitList.map(u => {
+        if (u.minPrice == null) return '';
+        const diffFromMin = cp - u.minPrice;
+        const diffPct = u.minPrice ? Math.round(Math.abs(diffFromMin)/u.minPrice*100) : 0;
+        let tag;
+        if (diffFromMin < 0)       tag = `<span class="pc-cmp-tag pc-cmp-tag-cheap">최저가보다 ${fmt(-diffFromMin)} 저렴 (${diffPct}%↓)</span>`;
+        else if (diffFromMin === 0) tag = `<span class="pc-cmp-tag pc-cmp-tag-same">최저가와 동일</span>`;
+        else                        tag = `<span class="pc-cmp-tag pc-cmp-tag-exp">최저가보다 ${fmt(diffFromMin)} 비쌈 (${diffPct}%↑)</span>`;
+        return `<div class="pc-row pc-cmp-row" style="border-top:1px dashed #d8b4fe">
+          <span class="pc-vendor-cell">
+            <span class="vbadge" style="background:#ede9fe;color:#7c3aed;font-weight:700;font-size:11.5px">🔵 비교가</span>
+            <span class="pc-date" style="color:#c4b5fd">단위: ${u.unit}</span>
+          </span>
+          <span class="pc-row-mid">
+            <span class="pc-price" style="color:#7c3aed">${fmt(cp)}</span>
+            ${tag}
+          </span>
+          <span class="note-cell" style="color:#c4b5fd">외부 견적</span>
+          <span></span>
+        </div>`;
+      }).join('');
+    }
+
     return `<div class="product-card">
       <div class="pc-head">
         <div class="pc-head-main">
-          <span class="pc-name editable" onclick="startEditGroupName('${g.name.replace(/'/g,"\'")}',this)">${hl(g.name,q)}</span>
+          <span class="pc-name editable" data-pname="${g.name}" onclick="startEditGroupName(this.dataset.pname,this)">${hl(g.name,q)}</span>
         </div>
         <div class="pc-head-meta">
           <span class="pc-vendor-count">${g.totalRows}개 견적 · ${g.unitCount}개 단위</span>
+          <button class="pc-cmp-btn${cmpVal!==''?' active':''}" data-pname="${g.name}" onclick="window.toggleCmpBar(this.dataset.pname)">⚖️ 비교가</button>
         </div>
       </div>
+      <div class="pc-cmp-bar" id="pc-cmpbar-${safeId}" style="${cmpVal!==''?'':'display:none'}">
+        <span class="pc-cmp-label">🔵 비교가 입력</span>
+        <input class="pc-cmp-input" type="number" placeholder="가격 입력" value="${cmpVal}"
+          data-pname="${g.name}"
+          oninput="window.setCmpPrice(this.dataset.pname,this.value)"
+          onchange="window.setCmpPrice(this.dataset.pname,this.value)"/>
+        <span style="font-size:11.5px;color:#7c3aed">원</span>
+        ${cmpVal!=='' ? '<button class="pc-cmp-clear" data-pname="'+g.name+'" onclick="window.clearCmpPrice(this.dataset.pname)">✕ 지우기</button>' : ''}
+      </div>
+      ${cmpVal!=='' ? '<div class="pc-body" style="border-bottom:1px solid #f0f0f0">'+cmpRowsHtml+'</div>' : ''}
       ${unitSectionsHtml}
     </div>`;
   }).join('');
 }
+
+// ── 비교가 기능 ──
+window._cmpPrices = {};
+
+window.toggleCmpBar = function(name) {
+  if (!window._cmpPrices) window._cmpPrices = {};
+  const safeId = name.replace(/[^\w\u{AC00}-\u{D7A3}]/gu, '_');
+  const bar = document.getElementById('pc-cmpbar-' + safeId);
+  if (!bar) { applyAll(); return; }
+  const isHidden = bar.style.display === 'none';
+  if (isHidden) {
+    bar.style.display = '';
+    const inp = bar.querySelector('.pc-cmp-input');
+    if (inp) setTimeout(() => inp.focus(), 30);
+  } else {
+    bar.style.display = 'none';
+  }
+};
+
+window.setCmpPrice = function(name, val) {
+  if (!window._cmpPrices) window._cmpPrices = {};
+  const num = val === '' ? '' : Number(val);
+  window._cmpPrices[name] = num === '' ? '' : (isNaN(num) ? '' : num);
+  applyAll();
+};
+
+window.clearCmpPrice = function(name) {
+  if (window._cmpPrices) delete window._cmpPrices[name];
+  applyAll();
+};
 
 function renderVendors(){
   const el = document.getElementById('vendor-cards');
@@ -2794,6 +2879,7 @@ function startEditDate(id, el, currentDate){
 }
 
 loadData();
+vsLoadData();
 
 window.applyFilters = applyFilters;
 window.applySearch = applySearch;
@@ -4153,29 +4239,42 @@ function vsMapCsvRows(rows) {
   return result;
 }
 
-// ── 직접 입력 파싱 (콤마 구분, CSV 컬럼 순서 동일) ──
-// 순서: DB유입날짜, 브랜드명, 업종(카테고리), 담당자명, 전화번호, 메일주소, 쇼핑몰링크, TM상태, 비고
+// ── 직접 입력 파싱 (구글 시트 탭 구분, 헤더 자동 감지) ──
+// 컬럼: 타임라인 | 업체명 | 주요 판매 품목 | 판매 링크 | 담당자명 | 전화번호 | 이메일 | 상태
+function vsDateOnlySheet(raw) {
+  if (!raw) return new Date().toISOString().slice(0,10);
+  // "2026. 6. 22" 또는 "2026.6.22" → "2026-06-22"
+  var m = raw.match(/(\d{4})[.\s]+\s*(\d{1,2})[.\s]+\s*(\d{1,2})/);
+  if (m) return m[1] + '-' + m[2].padStart(2,'0') + '-' + m[3].padStart(2,'0');
+  // ISO 형식도 허용
+  return vsDateOnly(raw);
+}
+
+var SHEET_HEADER_KEYWORDS = ['타임라인','업체명','브랜드명','담당자명','전화번호','이메일','상태','판매 링크','주요'];
+
+function vsIsHeaderLine(parts) {
+  return parts.some(function(p){
+    return SHEET_HEADER_KEYWORDS.some(function(k){ return p.indexOf(k) >= 0; });
+  });
+}
+
 function vsBulkParseTextLine(line) {
-  var parts = line.split(',').map(function(s){ return s.trim(); });
-  // 첫 번째 값이 날짜처럼 보이면 날짜로 처리, 아니면 브랜드명으로
-  var offset = 0;
-  var dateVal = new Date().toISOString().slice(0,10);
-  if (parts[0] && /^\d{4}/.test(parts[0])) {
-    dateVal = vsDateOnly(parts[0]);
-    offset = 1;
-  }
-  var progress = vsTmToProgress(parts[offset+6] || '');
+  // 탭 우선, 없으면 콤마
+  var sep = line.indexOf('\t') >= 0 ? '\t' : ',';
+  var parts = line.split(sep).map(function(s){ return s.trim(); });
+  // 컬럼 순서: [0]타임라인 [1]업체명 [2]주요품목 [3]판매링크 [4]담당자명 [5]전화번호 [6]이메일 [7]상태
+  var progress = vsTmToProgress(parts[7] || '');
   return {
-    date:     dateVal,
-    name:     parts[offset+0] || '',
-    items:    parts[offset+1] || '',
-    contact:  parts[offset+2] || '',
-    phone:    parts[offset+3] || '',
-    email:    parts[offset+4] || '',
-    link:     parts[offset+5] || '',
+    date:     vsDateOnlySheet(parts[0]),
+    name:     parts[1] || '',
+    items:    parts[2] || '',
+    link:     parts[3] || '',
+    contact:  parts[4] || '',
+    phone:    parts[5] || '',
+    email:    parts[6] || '',
     progress: progress,
     contract: progress === '계약 진행중' ? '계약 진행중' : '',
-    memo:     parts[offset+7] || ''
+    memo:     ''
   };
 }
 
@@ -4323,13 +4422,12 @@ window.vsBulkPreview = function() {
   }
   // 직접 입력 모드
   var raw = (document.getElementById('vrf-bulk-text') || {}).value || '';
-  var lines = raw.split('\n').map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 0; });
+  var lines = raw.split('\n').filter(function(l){ return l.trim().length > 0; });
   if (!lines.length) { alert('등록할 업체 정보를 입력해주세요.'); return; }
-  // 첫 줄이 헤더인지 감지 (브랜드명 | 업체명 포함 시 스킵)
-  var firstLower = lines[0].toLowerCase();
-  if (firstLower.includes('브랜드명') || firstLower.includes('업체명') || firstLower.includes('db 유입') || firstLower.includes('date')) {
-    lines = lines.slice(1);
-  }
+  // 헤더 행 자동 감지 및 제거 (탭/콤마 기준 파싱 후 키워드 확인)
+  var firstParts = lines[0].split(lines[0].indexOf('\t') >= 0 ? '\t' : ',').map(function(s){ return s.trim(); });
+  if (vsIsHeaderLine(firstParts)) lines = lines.slice(1);
+  if (!lines.length) { alert('데이터 행이 없습니다.'); return; }
   var entries = lines.map(vsBulkParseTextLine);
   vsBulkRenderPreview(entries);
 };
@@ -4513,7 +4611,26 @@ window.vsRegisterQuote = async function(idx) {
     }
   }, 350);
 };
+// ── VS_DATA Firebase 저장/불러오기 ──
+async function vsSaveData() {
+  try { await fbSet('/vs_data', VS_DATA); } catch(e) { console.warn('VS_DATA 저장 실패', e); }
+}
+
+async function vsLoadData() {
+  try {
+    var saved = await fbGet('/vs_data');
+    if (saved && Array.isArray(saved) && saved.length > 0) {
+      VS_DATA = saved;
+    } else if (VS_DATA.length > 0) {
+      // Firebase에 데이터 없으면 현재 하드코딩 데이터를 최초 1회 업로드
+      await vsSaveData();
+    }
+  } catch(e) { console.warn('VS_DATA 로드 실패', e); }
+  vsRefreshAll();
+}
+
 function vsRefreshAll() {
+  vsSaveData();
   vsRenderStats();
   vsRenderFilters();
   vsRender();
