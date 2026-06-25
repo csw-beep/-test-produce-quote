@@ -2116,11 +2116,16 @@ function filteredItems(){
 }
 
 function renderAll(){
-  updateDropdowns();
-  cmpRefreshNameSel();
-  renderStats(); renderTable(); renderVendors(); renderWinnerList();
-  renderAddForm(); renderManageList(); renderVendorSettings();
-  updateUndoBar();
+  try { updateDropdowns(); } catch(e){}
+  try { cmpRefreshNameSel(); } catch(e){}
+  try { renderStats(); } catch(e){}
+  try { renderTable(); } catch(e){ console.error('renderTable 오류:', e); }
+  try { renderVendors(); } catch(e){}
+  try { renderWinnerList(); } catch(e){}
+  try { renderAddForm(); } catch(e){}
+  try { renderManageList(); } catch(e){}
+  try { renderVendorSettings(); } catch(e){}
+  try { updateUndoBar(); } catch(e){}
 }
 
 function renderStats(){
@@ -3010,7 +3015,14 @@ vsLoadData();
 
 window.applyFilters = applyFilters;
 window.applySearch = applySearch;
-window._quoteSearchFn = function(q){ searchQ = q; renderAll(); };
+window._quoteSearchFn = function(q){
+  searchQ = q;
+  try { renderTable(); } catch(e){ console.error('search renderTable:', e); }
+  try {
+    const rc = document.getElementById('result-count');
+    // stats 숫자는 검색 중에도 유지 (필요 시 renderStats() 추가)
+  } catch(e){}
+};
 window.cancelUpload = cancelUpload;
 window.exportCSV = exportCSV;
 window.exportTemplate = exportTemplate;
