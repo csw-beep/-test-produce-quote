@@ -944,7 +944,7 @@ body {
 <div class="toolbar">
   <div class="search-wrap">
     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="search" placeholder="품목명 또는 업체명 검색..." autocomplete="off"/>
+    <input id="search" placeholder="품목명 또는 업체명 검색..." oninput="quoteSearch(this.value)" autocomplete="off"/>
   </div>
 </div>
 
@@ -3010,10 +3010,7 @@ vsLoadData();
 
 window.applyFilters = applyFilters;
 window.applySearch = applySearch;
-document.getElementById('search').addEventListener('input', function() {
-  searchQ = this.value.trim();
-  renderAll();
-});
+window._quoteSearchFn = function(q){ searchQ = q; renderAll(); };
 window.cancelUpload = cancelUpload;
 window.exportCSV = exportCSV;
 window.exportTemplate = exportTemplate;
@@ -3047,6 +3044,11 @@ window.quoteAddVendorAndSwitch = async function(vendorName) {
   }
 };
 })();
+</script>
+<script>
+function quoteSearch(val) {
+  if (window._quoteSearchFn) window._quoteSearchFn(val);
+}
 </script>
 <script>
 (function(){
