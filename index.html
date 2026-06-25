@@ -3011,7 +3011,6 @@ function startEditDate(id, el, currentDate){
 }
 
 loadData();
-vsLoadData();
 
 window.applyFilters = applyFilters;
 window.applySearch = applySearch;
@@ -4890,6 +4889,7 @@ document.getElementById('vs-last-updated').textContent = '기준일: 2026. 6. 20
 vsRenderStats();
 vsRenderFilters();
 vsRender();
+vsLoadData();
 })();
 </script>
 </div>
